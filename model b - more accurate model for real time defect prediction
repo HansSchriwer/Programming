@@ -1,0 +1,133 @@
+# Model B:
+To create an enhanced and more accurate model for real-time defect detection, we can use a deeper neural network architecture, more sophisticated preprocessing, and data augmentation. Let's enhance the previous example by incorporating these improvements.
+
+# Step 1: Setup and Install Required Libraries
+Ensure you have the necessary libraries installed:
+
+pip install tensorflow opencv-python scikit-learn
+
+# Step 2: Load and Preprocess Data with Augmentation
+Use data augmentation to increase the robustness of the model.
+
+import cv2
+import numpy as np
+import os
+from tensorflow.keras.models import Sequential
+from tensorflow.keras.layers import Conv2D, MaxPooling2D, Flatten, Dense, Dropout
+from tensorflow.keras.preprocessing.image import ImageDataGenerator
+from tensorflow.keras.callbacks import ModelCheckpoint, EarlyStopping
+
+# Set up paths
+data_dir = "path_to_your_dataset"
+train_dir = os.path.join(data_dir, "train")
+val_dir = os.path.join(data_dir, "validation")
+
+# Image data generators for loading images with augmentation
+train_datagen = ImageDataGenerator(
+    rescale=1./255,
+    rotation_range=40,
+    width_shift_range=0.2,
+    height_shift_range=0.2,
+    shear_range=0.2,
+    zoom_range=0.2,
+    horizontal_flip=True,
+    fill_mode='nearest'
+)
+
+val_datagen = ImageDataGenerator(rescale=1./255)
+
+train_generator = train_datagen.flow_from_directory(
+    train_dir,
+    target_size=(150, 150),
+    batch_size=32,
+    class_mode='binary'
+)
+
+val_generator = val_datagen.flow_from_directory(
+    val_dir,
+    target_size=(150, 150),
+    batch_size=32,
+    class_mode='binary'
+)
+# Step 3: Build an Enhanced Neural Network Model
+Here we use a deeper architecture with dropout layers to prevent overfitting.
+
+model = Sequential([
+    Conv2D(32, (3, 3), activation='relu', input_shape=(150, 150, 3)),
+    MaxPooling2D(2, 2),
+    Conv2D(64, (3, 3), activation='relu'),
+    MaxPooling2D(2, 2),
+    Conv2D(128, (3, 3), activation='relu'),
+    MaxPooling2D(2, 2),
+    Conv2D(256, (3, 3), activation='relu'),
+    MaxPooling2D(2, 2),
+    Flatten(),
+    Dense(512, activation='relu'),
+    Dropout(0.5),
+    Dense(1, activation='sigmoid')
+])
+
+model.compile(optimizer='adam',
+              loss='binary_crossentropy',
+              metrics=['accuracy'])
+
+model.summary()
+
+# Step 4: Train the Model with Callbacks for Early Stopping and Best Model Saving
+
+# Define callbacks
+checkpoint = ModelCheckpoint('best_model.h5', monitor='val_loss', save_best_only=True, mode='min')
+early_stopping = EarlyStopping(monitor='val_loss', patience=10, mode='min', restore_best_weights=True)
+
+history = model.fit(
+    train_generator,
+    steps_per_epoch=100,
+    epochs=50,
+    validation_data=val_generator,
+    validation_steps=50,
+    callbacks=[checkpoint, early_stopping]
+)
+# Step 5: Real-time Defect Detection
+We will use the best model saved during training for real-time detection.
+
+def preprocess_frame(frame):
+    frame = cv2.resize(frame, (150, 150))
+    frame = np.expand_dims(frame, axis=0)
+    frame = frame / 255.0
+    return frame
+
+# Load the best model
+model.load_weights('best_model.h5')
+
+# Initialize webcam
+cap = cv2.VideoCapture(0)
+
+while True:
+    ret, frame = cap.read()
+    if not ret:
+        break
+
+    # Preprocess the frame
+    preprocessed_frame = preprocess_frame(frame)
+    
+    # Predict defect
+    prediction = model.predict(preprocessed_frame)
+    label = 'Defect' if prediction > 0.5 else 'No Defect'
+    
+    # Display the label on the frame
+    cv2.putText(frame, label, (10, 30), cv2.FONT_HERSHEY_SIMPLEX, 1, (0, 255, 0), 2, cv2.LINE_AA)
+    cv2.imshow('Real-time Defect Detection', frame)
+    
+    # Break the loop on 'q' key press
+    if cv2.waitKey(1) & 0xFF == ord('q'):
+        break
+
+# Release the capture and close windows
+cap.release()
+cv2.destroyAllWindows()
+Summary of Enhancements
+1.	Data Augmentation: Added rotation, width/height shift, shear, zoom, and horizontal flip to the training data.
+2.	Deeper Model Architecture: Increased the depth of the CNN with additional convolutional layers.
+3.	Dropout Layers: Added dropout layers to reduce overfitting.
+4.	Callbacks: Used ModelCheckpoint to save the best model and EarlyStopping to stop training when no improvement is seen.
+These enhancements should improve the model's accuracy and robustness for real-time defect detection. Ensure to replace "path_to_your_dataset" and "best_model.h5" with actual paths in your environment.
